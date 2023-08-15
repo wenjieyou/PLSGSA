@@ -30,7 +30,7 @@ import time
 start = time.time()
 
 # 读入 matlab 数据 cell 格式
-data = sio.loadmat('dat/BCdat.mat');
+data = sio.loadmat('dat/BreastCancerData.mat');
 trn = data['trn']    # 读取字典对象，字典是另一种可变容器模型
 ytrn = data['ytrn'].ravel()
 tst = data['tst']
