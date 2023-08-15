@@ -8,6 +8,12 @@ Created on Wed Sep 21 17:42:54 2022
     结果返回每个变量的集成pls-vip值(evip), 注意有两种方法：权值和排名
     其中样本抽样时服从总体中类的分布
 
+PLS-based feature selection
+     1. (weak selector plsfrc == plsranking(Matlab))
+     2. Integrated feature selection based on double perturbation (sample replacement sampling, feature local sampling) --mpegs_pls
+     The result returns the integrated pls-vip value (evip) of each variable, note that there are two methods: weight and ranking
+     Among them, when the sample is sampled, it obeys the distribution of the class in the population
+
 @author: wenjie
 """
 
@@ -23,6 +29,9 @@ def mpegs_pls(dat, ylab, nit, nfac):
      基于双重扰动(样本放回抽样,特征局部抽样)的PLS集成特征选择。
      结果返回每个变量的集成vip值(evip),
      其中样本抽样时服从总体中类的分布
+     PLS ensemble feature selection based on double perturbation (sample replacement sampling, feature local sampling).
+      The result returns the integrated vip value (evip) for each variable,
+      Among them, when the sample is sampled, it obeys the distribution of the class in the population
     """
     s_num, f_num = dat.shape
     D = int(np.sqrt(f_num))
