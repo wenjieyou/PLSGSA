@@ -1,2 +1,2 @@
-# PLSFSA
-PLS-based feature subset augmentation
+# PLSGSA
+PLS-based gene subset augmentation
