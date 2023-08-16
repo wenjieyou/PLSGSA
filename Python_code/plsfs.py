@@ -2,17 +2,11 @@
 """
 Created on Wed Sep 21 17:42:54 2022
 
-基于 PLS 特征选择 
-    1.(弱选择器 plsfrc == plsranking(Matlab))
-    2.基于双重扰动(样本放回抽样,特征局部抽样)的集成特征选择--mpegs_pls 
-    结果返回每个变量的集成pls-vip值(evip), 注意有两种方法：权值和排名
-    其中样本抽样时服从总体中类的分布
-
-PLS-based feature selection
-     1. (weak selector plsfrc == plsranking(Matlab))
+PLS-based gene (feature) subset augmentation
+     1. (weak selector plsfrc == plsmgm)
      2. Integrated feature selection based on double perturbation (sample replacement sampling, feature local sampling) --mpegs_pls
      The result returns the integrated pls-vip value (evip) of each variable, note that there are two methods: weight and ranking
-     Among them, when the sample is sampled, it obeys the distribution of the class in the population
+     Among them, when the sample is sampled, it obeys the distribution of the class in the population.
 
 @author: wenjie
 """
@@ -26,12 +20,9 @@ np.seterr(divide='ignore',invalid='ignore')
 
 def mpegs_pls(dat, ylab, nit, nfac):
     """
-     基于双重扰动(样本放回抽样,特征局部抽样)的PLS集成特征选择。
-     结果返回每个变量的集成vip值(evip),
-     其中样本抽样时服从总体中类的分布
-     PLS ensemble feature selection based on double perturbation (sample replacement sampling, feature local sampling).
+      PLS-based Ensemble Gene Selection with Multiple-perturbation (sample replacement sampling, feature local sampling).
       The result returns the integrated vip value (evip) for each variable,
-      Among them, when the sample is sampled, it obeys the distribution of the class in the population
+      Among them, when the sample is sampled, it obeys the distribution of the class in the population.
     """
     s_num, f_num = dat.shape
     D = int(np.sqrt(f_num))
@@ -39,27 +30,30 @@ def mpegs_pls(dat, ylab, nit, nfac):
     V = np.zeros((1,f_num))   # 每次基于PLS的VIP系数
     nsel = np.ones((1,f_num)) # number of selected 选中的次数(初始化1保证分母非零)
     
-    for k in range(nit):
-        # 对特征扰动，从特征空间中随机(部分)抽样，抽样率为sqrt()
+    for k in range(nit):        
+        # For feature perturbations, randomly (partially) sample from the feature space, 
+        # and the sampling rate uses sqrt()
         f_sel = random.sample(range(f_num),D)
         # f_sel = f_sel.sort()
         dat_tmp = dat[:,f_sel]
         
-        # 对样本扰动，从样本集中依类别分布进行随机放回抽样，
-        class_label = np.unique(ylab)    # % 类别标签总数，类别个数
-        s_sel= []
-        # 抽样保证类平衡, 也即样本放回抽样后的类分布同总体分布
+        # For sample perturbation, random replacement sampling is performed from the sample set 
+        # according to the category distribution,
+        class_label = np.unique(ylab)    # The total number of category labels, the number of categories
+        s_sel= []       
+        # Sampling ensures class balance, that is, the class distribution of the sample after sampling 
+        # is the same as the overall distribution
         for i in range(class_label.shape[0]):
             s_tmp = np.argwhere(ylab.reshape(s_num) == class_label[i])
             s_tmp_num = s_tmp.shape[0]
             sid_tmp = np.random.choice(s_tmp.reshape(s_tmp_num), 
-                                       s_tmp_num, replace=True)  # 放回抽样
+                                       s_tmp_num, replace=True)  # Sampling with replacement
             s_sel = s_sel + sid_tmp.tolist()
             
         X = dat_tmp[s_sel,:]   
         y = ylab[s_sel]
         
-        vip = plsvip(X, y, nfac)   # 基于特征权值
+        vip = plsvip(X, y, nfac)   # Based on feature weight
         V[:,f_sel] = V[:,f_sel] + vip
         nsel[:,f_sel] = nsel[:,f_sel] + 1
         
@@ -111,7 +105,7 @@ def plsfrc(trn, ytrn, nfac):
     if nfac is None:
         nfac = np.unique(ytrn).shape[0]
         
-    class_label = np.unique(ytrn)    # % 类别标签编码(哑变量:类别-1)
+    class_label = np.unique(ytrn)    # Category label encoding (dummy variable: number_category-1)
     Y = np.zeros((m, class_label.shape[0]-1),dtype=int)    
     for i in range(class_label.shape[0]-1):
         cls_label_vec = np.tile(class_label[i], m)
@@ -128,8 +122,8 @@ def plsfrc(trn, ytrn, nfac):
 
 def plsvip(trn, ytrn, nfac):    
     """    
-    利用PLS计算VIP指标，其中ytrn类别标签编码。
-    结果返回 vip (每个变量的 vip 值),  
+    VIP metrics were computed using PLS, where ytrn class labels are encoded.
+    The result returns vip (vip value for each variable),
     """    
         
     m = ytrn.shape[0]
@@ -137,7 +131,7 @@ def plsvip(trn, ytrn, nfac):
     if nfac is None:
         nfac = np.unique(ytrn).shape[0]
         
-    class_label = np.unique(ytrn)    # % 类别标签编码(哑变量:类别-1)
+    class_label = np.unique(ytrn)    # Category label encoding (dummy variable: number_category-1)
     Y = np.zeros((m, class_label.shape[0]-1),dtype=int)    
     for i in range(class_label.shape[0]-1):
         cls_label_vec = np.tile(class_label[i], m)
