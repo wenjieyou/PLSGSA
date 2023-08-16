@@ -2,7 +2,7 @@
 """
 Created on Wed Oct 19 18:02:13 2022
 
-    拓扑网络图 挖掘
+    Topological Network Diagram Mining
 
 @author: wenjie
 """
