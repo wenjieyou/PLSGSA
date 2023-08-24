@@ -122,6 +122,7 @@ def plsfrc(trn, ytrn, nfac):
 
 def plsvip(trn, ytrn, nfac):    
     """    
+    plsvip == PLSMGM
     VIP metrics were computed using PLS, where ytrn class labels are encoded.
     The result returns vip (vip value for each variable),
     """    
