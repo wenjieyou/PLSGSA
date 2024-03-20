@@ -25,7 +25,7 @@ import time
 start = time.time()
 
 # Read in matlab data, cell format
-data = sio.loadmat('dat/BreastCancerData.mat');
+data = sio.loadmat('Data/BreastCancer_Data.mat');
 trn = data['trn']    # Read dictionary objects
 ytrn = data['ytrn'].ravel()
 tst = data['tst']
