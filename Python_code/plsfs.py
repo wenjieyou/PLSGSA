@@ -2,16 +2,19 @@
 """
 Created on Wed Sep 21 17:42:54 2022
 
-PLS-based gene (feature) subset augmentation
-     1. (weak selector plsfrc == plsmgm)
-     2. Integrated feature selection based on double perturbation (sample replacement sampling, feature local sampling) --mpegs_pls
-     The result returns the integrated pls-vip value (evip) of each variable, note that there are two methods: weight and ranking
-     Among them, when the sample is sampled, it obeys the distribution of the class in the population.
+PLS-based feature selection (plsfs)
+    1. PLS-based feature ranking algorithm (weak selector, plsfrc)
+    2. PLS-based recursive feature elimination (plsrfec)
+    3. PLS-based local recursive feature elimination (plslrfec, suitable for multi-category data)
+    4. Multi-perturbations ensemble feature selection (mpegs_pls)
+    The result returns the ensemble pls-vip value (evip) for each variable. Note: there are two methods: by weight and by rank.
+    Sampling follows the class distribution in the population.
 
 @author: wenjie
 """
 
 import numpy as np
+import scipy.io as sio
 from sklearn.utils.validation import check_random_state
 from sklearn.utils.extmath import randomized_svd
 import random
@@ -20,29 +23,41 @@ np.seterr(divide='ignore',invalid='ignore')
 
 def mpegs_pls(dat, ylab, nit, nfac):
     """
-      PLS-based Ensemble Gene Selection with Multiple-perturbation (sample replacement sampling, feature local sampling).
-      The result returns the integrated vip value (evip) for each variable,
-      Among them, when the sample is sampled, it obeys the distribution of the class in the population.
+     PLS-based Multi-perturbations Ensemble Gene Selection (samples with replacement, local feature sampling).
+     The result returns the ensemble vip value (evip) for each variable.
+     Sampling follows the class distribution in the population.
+
+    Parameters:
+    dat (np.ndarray): Examples. Rows correspond to observations, columns to features.
+    ylab (np.ndarray): Labels. A column vector of response values or class labels.
+    nit (int): Number of resampling.   
+    nfac (int): Number of latent variables (factors). 
+
+    Returns:     
+    IDX_FEAT  -  indices of columns in TRN ordered by feature importance.
+    W_FEAT - feature weights with large positive weights assigned to important feature.
+
+    Reference:
+    W. You, Z. Yang, and G. Ji, PLS-based gene subset augmentation and tumor-specific gene 
+    identification, Computers in Biology and Medicine, Volume 174, 2024, 108434, 
+    https://doi.org/10.1016/j.compbiomed.2024.108434..
     """
     s_num, f_num = dat.shape
     D = int(np.sqrt(f_num))
     
-    V = np.zeros((1,f_num))   # 每次基于PLS的VIP系数
-    nsel = np.ones((1,f_num)) # number of selected 选中的次数(初始化1保证分母非零)
+    V = np.zeros((1,f_num))   # VIP coefficients for each iteration based on PLS
+    nsel = np.ones((1,f_num)) # number of selections (initialized as 1 to avoid zero in denominator)
     
-    for k in range(nit):        
-        # For feature perturbations, randomly (partially) sample from the feature space, 
-        # and the sampling rate uses sqrt()
+    for k in range(nit):
+        # Perturb features, randomly sample from the feature space, with a rate of sqrt()
         f_sel = random.sample(range(f_num),D)
         # f_sel = f_sel.sort()
         dat_tmp = dat[:,f_sel]
         
-        # For sample perturbation, random replacement sampling is performed from the sample set 
-        # according to the category distribution,
-        class_label = np.unique(ylab)    # The total number of category labels, the number of categories
-        s_sel= []       
-        # Sampling ensures class balance, that is, the class distribution of the sample after sampling 
-        # is the same as the overall distribution
+        # Perturb samples, perform random sampling with replacement from the sample set, 
+        class_label = np.unique(ylab)    # Total number of class labels
+        s_sel= []
+        # Sampling ensures class balance, i.e., the sampled class distribution matches the overall distribution
         for i in range(class_label.shape[0]):
             s_tmp = np.argwhere(ylab.reshape(s_num) == class_label[i])
             s_tmp_num = s_tmp.shape[0]
@@ -53,7 +68,7 @@ def mpegs_pls(dat, ylab, nit, nfac):
         X = dat_tmp[s_sel,:]   
         y = ylab[s_sel]
         
-        vip = plsvip(X, y, nfac)   # Based on feature weight
+        vip = plsvip(X, y, nfac)   # Based on feature weights
         V[:,f_sel] = V[:,f_sel] + vip
         nsel[:,f_sel] = nsel[:,f_sel] + 1
         
@@ -61,24 +76,147 @@ def mpegs_pls(dat, ylab, nit, nfac):
     w_feat = np.sort(evip)[::-1]
     idx_feat = np.argsort(evip)[::-1]
         
-    return idx_feat, w_feat      
+    return idx_feat, w_feat    
+  
 
+def plsrfec(trn_data, trn_cls, nfac=None, alpha=0.5):
+    """
+    PLS-based Recursive Feature Elimination for classification
+
+    Parameters:
+    trn_data (np.ndarray): Training examples. Rows correspond to observations, columns to features.
+    trn_cls (np.ndarray): Training labels. A column vector of response values or class labels.
+    nfac (int, optional): Number of latent variables (factors). Defaults to number of unique classes.
+    alpha (float, optional): Reduction factor for feature elimination. Defaults to 0.5.
+
+    Return:  
+    rfe_ind (np.ndarray): Indices of columns in trn_data ordered by feature importance.
+    
+    Code by: Wenjie, You, 2022.09.22    
+    
+    Reference:
+    [1] W. You, Z. Yang, and G. Ji, PLS-based Recursive Feature Elimination
+          for High-imensional Small Sample, Knowledge-Based Systems, Vol.55, 
+          2014, Pages 15-28,
+          (https://www.sciencedirect.com/science/article/pii/S0950705113003158)
+
+    """
+    if nfac is None:
+        nfac = len(np.unique(trn_cls))
+        
+    feat_dim = trn_data.shape[1]
+    
+    # Calling plsfrc, ranking of features    
+    ind_feat, _ = plsfrc(trn_data, trn_cls, nfac)
+    ind_feat2 = np.copy(ind_feat)
+    
+    k = feat_dim - 1
+    while k >= nfac:
+        # Select the current feature indices to keep
+        orig_inx = ind_feat[:k] 
+        
+        # Extract the submatrix of training data with the selected features
+        rfe_data = trn_data[:, orig_inx]
+        
+        # Call plsfrc on the submatrix and re-rank the remaining features
+        ind2, _ = plsfrc(rfe_data, trn_cls, nfac)
+        
+        # Update global feature ranking by modifying ind_feat according to ind2
+        for m, inx in enumerate(ind2):
+            ind_feat[m] = ind_feat2[inx]
+        
+        # Copy the updated feature ranking to ind_feat2 for use in the next iteration
+        ind_feat2 = np.copy(ind_feat)
+
+        if k >= 100:
+            k = round(k * alpha)
+        else:
+            k -= 1
+
+    return ind_feat
+
+
+def plslrfec(trn_data, trn_cls, nfac=2):
+    """    
+    PLSLRFEC - PLS-based local recursive feature elimination for classification
+    Based on PLS-OVA-RFE for multi-class feature selection.
+
+    Reference:
+    [1] W. You, Z. Yang, and G. Ji, Feature selection for high-dimensional multi-category data using PLS-based local recursive feature elimination,
+        Expert Systems with Applications, Vol. 41, Issue 4, Part 1, 2014, Pages 1463-1475,
+        (https://www.sciencedirect.com/science/article/pii/S0957417413006647)
+    """
+    feat_dim = trn_data.shape[1]    
+    
+    ind_feat, _ = PLS_OVA(trn_data, trn_cls, nfac)
+       
+    ind_feat2 = np.zeros((feat_dim, 2))
+    ind_feat2[:, 0] = np.arange(feat_dim) 
+    ind_feat2[:, 1] = ind_feat
+    
+    k = feat_dim - 1
+    
+    while k >= nfac:        
+        orig_inx = ind_feat[:k]         
+        RFE_data = trn_data[:, orig_inx]        
+        
+        ind2, _ = PLS_OVA(RFE_data, trn_cls, nfac)         
+
+        for m in range(len(ind2)):
+            inx = ind2[m]
+            ind_feat[m] = ind_feat2[inx, 1]        
+        
+        ind_feat2[:, 0] = np.arange(feat_dim)
+        ind_feat2[:, 1] = ind_feat        
+        
+        if k >= 100:
+            k = round(k * 0.5)
+        else:
+            k = k - 1
+    
+    return ind_feat
+
+
+def PLS_OVA(trn, ytrn, nfac=None):
+    """
+    PLS_OVA - PLS-based One-Versus-All feature ranking for classification.
+        This algorithm is suitable for multi-category classification tasks
+    """
+    if nfac is None:
+        nfac = 2
+        
+    tmp = ytrn  # Save original ytrn labels
+    class_label = np.unique(ytrn)  # Get unique class labels
+    rr = np.zeros((len(class_label), trn.shape[1]))  # Initialize matrix to store feature ranking results
+
+    # Perform One-Versus-All strategy for each class label
+    for i in range(len(class_label)):
+        ytrn[ytrn != class_label[i]] = class_label[i] + 1  # Set non-current class labels to class_label[i]+1
+        rank_feat = plsvip(trn, ytrn, nfac)  # Call plsvip to compute feature scores
+        rr[i, :] = rank_feat  # Store the results in the rr matrix
+        ytrn = tmp  # Restore ytrn labels
+
+    res = np.mean(rr, axis=0)  # Calculate the average score for each feature
+    rank_feat = np.sort(res)[::-1]  # Sort the scores in descending order
+    ind_feat = np.argsort(res)[::-1]  # Return the sorted feature indices
+
+    return ind_feat, rank_feat
 
 def plsfrc(trn, ytrn, nfac):    
     """
     PLSFRC - PLS-based Feature Ranker for Classification
-    
+            
     Parameters
     ----------
-  TRN  -  training examples
-  YTRN - training labels
+   TRN  -  training examples
+   YTRN - training labels
    NFAC - number of  latent variables (factors), NFAC defaults to 'number of categories'.
    TRN is a data matrix whose rows correspond to points (or observations) and whose
    columns correspond to features (or predictor variables). YTRN is a column vector
    of response values or class labels for each observations in TRN.  TRN and YTRN
    must have the same number of rows.
 
-
+   Return:  
    IDX_FEAT  -  indices of columns in TRN ordered by feature importance.
    VIP_FEAT - feature weights with large positive weights assigned to important feature.
 
@@ -94,9 +232,8 @@ def plsfrc(trn, ytrn, nfac):
    [1] G. Ji, Z. Yang, and W. You, PLS-based Gene Selection and Identification
          of Tumor-Specific Genes, IEEE Transactions on Systems, Man, Cybernetics C,
          Application Review, vol. 41, no. 6, pp. 830-841, Nov. 2011.
-   [2] W. You, Z. Yang, and G. Ji, PLS-based Recursive Feature Elimination
-         for High-imensional Small Sample, Knowledge-Based Systems, Vol.55, 2014, pp15-28
-   [3] https://github.com/rmarkello/pyls.git
+         https://ieeexplore.ieee.org/abstract/document/5607317
+   [2] https://github.com/rmarkello/pyls.git
 
     """
         
@@ -105,26 +242,33 @@ def plsfrc(trn, ytrn, nfac):
     if nfac is None:
         nfac = np.unique(ytrn).shape[0]
         
-    class_label = np.unique(ytrn)    # Category label encoding (dummy variable: number_category-1)
+    # Encode class labels into dummy variables matrix Y
+    class_label = np.unique(ytrn)   
     Y = np.zeros((m, class_label.shape[0]-1),dtype=int)    
+    # Convert class labels to dummy variables (0/1)    
     for i in range(class_label.shape[0]-1):
         cls_label_vec = np.tile(class_label[i], m)
         Y[:,i] = (ytrn.reshape(m) == cls_label_vec)
         
     X = trn
-    pctvar, W = plsreg(X, Y, nfac);        
+    # Call plsreg to get explained variance (pctvar) and weights (W)
+    pctvar, W = plsreg(X, Y, nfac); 
+
+    # Calculate VIP (Variable Importance in Projection) weights       
     vip = X.shape[1]*pctvar[1]@((W**2).T)/np.sum(pctvar[1])
     
+    # Sort the features based on VIP weights
     vip_feat = np.sort(vip)[::-1]
     idx_feat = np.argsort(vip)[::-1]
         
+    # Return sorted feature indices and VIP weights
     return idx_feat, vip_feat
 
 def plsvip(trn, ytrn, nfac):    
     """    
-    plsvip == PLSMGM
-    VIP metrics were computed using PLS, where ytrn class labels are encoded.
-    The result returns vip (vip value for each variable),
+    VIP indicator is calculated using PLS, 
+    where ytrn implements category label encoding.
+    The result returns vip (vip value for each variable),    
     """    
         
     m = ytrn.shape[0]
@@ -132,7 +276,7 @@ def plsvip(trn, ytrn, nfac):
     if nfac is None:
         nfac = np.unique(ytrn).shape[0]
         
-    class_label = np.unique(ytrn)    # Category label encoding (dummy variable: number_category-1)
+    class_label = np.unique(ytrn)   
     Y = np.zeros((m, class_label.shape[0]-1),dtype=int)    
     for i in range(class_label.shape[0]-1):
         cls_label_vec = np.tile(class_label[i], m)
@@ -143,7 +287,6 @@ def plsvip(trn, ytrn, nfac):
     vip = X.shape[1]*pctvar[1]@((W**2).T)/np.sum(pctvar[1])
     
     return vip
-
 
 
 def plsreg(X, Y, ncomp):   
@@ -273,3 +416,22 @@ def svd(crosscov, n_components=None, seed=None):
 
     return U, np.diag(d), V
 
+
+if __name__ == '__main__':    
+    data = sio.loadmat('dat/SRBCT.mat')
+    trn = data['trn']
+    ytrn = data['ytrn']
+    
+    # Feature selector (test our algorithm)
+    # Weak feature ranker based on PLS (fast)   
+    rank_feat, vip_feat = plsfrc(trn,ytrn,2)
+    
+    # PLS-based recursive feature elimination (robust)
+    # rfe_ind = plsrfec(trn, ytrn, 4)     
+    
+    # PLS-based local recursive feature elimination (multi-category classification)
+    # rfe_ind = plslrfec(trn, ytrn)    
+    
+    # PLS-based multi-perturbations ensemble gene (feature) selection
+    # (generated feature subsets have diversity)
+    # idx_feat, w_feat = mpegs_pls(trn,ytrn,2000,2)
