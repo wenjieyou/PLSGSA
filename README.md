@@ -29,12 +29,6 @@ git clone https://github.com/wenjieyou/PLSFSA.git
 cd PLSFSA
 ```
 
-Ensure that you have the necessary dependencies installed. You can install them using:
-
-```bash
-pip install -r requirements.txt
-```
-
 ## Usage
 
 To run the feature subset augmentation process, you can use the provided script `main_PLSGSA.py`. The script supports standard machine learning workflows for training and testing with feature subset selection.
