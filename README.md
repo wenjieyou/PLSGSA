@@ -6,11 +6,11 @@ This repository implements a **PLS-based Feature Subset Augmentation** algorithm
 
 Highlights:
 
-A novel gene subset augmentation strategy that employs different perturbation mechanisms to identify differentially expressed gene subsets is proposed. The proposed strategy can identify a large number of different gene subsets, surpassing the traditional method of generating single gene subset.
+- A novel gene subset augmentation strategy that employs different perturbation mechanisms to identify differentially expressed gene subsets is proposed. The proposed strategy can identify a large number of different gene subsets, surpassing the traditional method of generating single gene subset.
 
-The multiple sene measurement alsorithm based on partial least squares considers sene-phenotype and sene-sene correlations to a certain extent, which can identify differentially expressed genes, including weak signals genes.
+- The multiple sene measurement alsorithm based on partial least squares considers sene-phenotype and sene-sene correlations to a certain extent, which can identify differentially expressed genes, including weak signals genes.
 
-Gene networks and association analysis are constructed on a large number of subsets obtained by the augmentation algorithm to mine and identify tumor-specific genes. The proposed method can also cope with the challenges of high-dimensional data sets and limited samples in various fields.
+- Gene networks and association analysis are constructed on a large number of subsets obtained by the augmentation algorithm to mine and identify tumor-specific genes. The proposed method can also cope with the challenges of high-dimensional data sets and limited samples in various fields.
 
 
 ### Key Features:
