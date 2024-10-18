@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-PLS-based Feature Subset Augmentation: PLSFSA
-Uses PLS-based multi-perturbation integrated gene selection (MpEGS-PLS) to 
-generate a series of feature subsets. 
+PLS-based Gene (Feature) Subset Augmentation: PLSGSA
+Uses PLS-based multi-perturbation ensemble gene selection (MpEGS-PLS) to 
+generate a series of gene (feature) subsets. 
 Recognition performance of the test set is used as the evaluation criterion.
 
 Reference:
@@ -101,5 +101,4 @@ np.savez('Result_BCdat_MpEGS2000_top10_time20000', max_perf=max_perf,
          lst_best_ids=np.array(lst_best_ids, dtype=object))
 
 end = time.time()
-print(f'\n CPU运行时间：{end-start} 秒')
-
+print(f'\n CPU running time：{end-start} second')
