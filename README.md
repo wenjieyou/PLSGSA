@@ -25,7 +25,7 @@ Highlights:
 To get started, clone this repository:
 
 ```bash
-git clone https://github.com/wenjieyou/PLSFSA.git
+git clone https://github.com/wenjieyou/PLSGSA.git
 cd PLSFSA
 ```
 
